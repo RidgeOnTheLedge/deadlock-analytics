@@ -1,0 +1,115 @@
+import requests, json
+import pandas as pd
+
+class client:
+
+    def bronze_matches(self):
+        url = 'https://api.deadlock-api.com/v1/matches/metadata'
+
+        params = {
+            "limit": 200,
+            "order_by": "start_time",
+            "order_direction": "desc",
+            "match_mode": "ranked",
+            "include_info": "true",
+            "include_more_info": "true",
+            "include_objectives": "true",
+            "include_mid_boss": "true",
+            "include_player_info": "true",
+            "include_player_final_stats": "true",
+            "include_player_stats": "true",
+            "include_player_items": "true",
+            "include_player_death_details": "true",
+            "hero_ids": "77",  # Only get hero ids for apollo
+            "format": "json",
+        }
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        matches = response.json()
+
+        matches_df = pd.DataFrame(matches)
+        return matches_df
+
+    def __init__(self, df_matches, df_objectives, df_players, df_stats, df_items):
+        self.df_matches = self.bronze_matches()
+        self.df_players = self.silver_players() # Dependent on matches
+        self.df_stats = self.silver_stats() # Dependent on df_players being defined
+        self.df_items = self.silver_items()
+        self.df_objectives = self.silver_objectives()
+
+    def silver_objectives(self):
+        # Explode the lists into individual rows
+        matches_objectives = self.df_matches[["match_id", "objectives"]].explode("objectives")
+
+        # Normalize the dictionaries AND preserve the original index alignment
+        normalized_df = pd.json_normalize(matches_objectives['objectives'])
+        normalized_df.index = matches_objectives.index
+
+        # Join them safely without mismatched rows
+        matches_objectives = matches_objectives[["match_id"]].join(normalized_df)
+        return matches_objectives
+
+
+    def silver_players(self):
+        # player_rows = []
+        # for match in self.df_matches:
+        #     for p in match["players"]:
+        #         p["match_id"] = match["match_id"]
+        #         player_rows.append(p)
+        #
+        # df_players = pd.DataFrame(player_rows)
+        df_players = pd.json_normalize(self.df_matches.to_dict('records'), record_path=['players'], meta=["match_id"])
+        return df_players
+
+    def silver_stats(self):
+        df_stats =  self.df_players[['match_id', 'account_id', 'hero_id', 'stats']].explode('stats')
+        df_stats = df_stats.join(pd.json_normalize(df_stats['stats']))
+        return df_stats
+
+    def silver_items(self):
+        items_df = self.df_players[['match_id', 'account_id', 'hero_id', 'items']].explode('items')
+        items_df = items_df.join(pd.json_normalize(items_df['items']))
+
+        url = 'https://api.deadlock-api.com/v1/assets/items'
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        items = response.json()
+
+        mapping = {}
+        for item in items:
+            if item['type'] == 'upgrade' and item.get('shopable', False):
+                mapping[item["id"]] = item["name"]
+                upgrade_id = item.get('upgrade_id')
+
+        items_df["item_name"] = items_df["item_id"].map(mapping)
+
+
+        items_df = items_df.dropna(subset=['game_time_s'])
+        # Fix the error of int64, which is because int65 cnat have Na but Int64 can
+        by_cols = ['account_id', 'match_id', 'hero_id', 'game_time_s', 'time_stamp_s']
+        for col in by_cols:
+            if col in items_df.columns:
+                items_df[col] = items_df[col].astype("Int64")
+            if col in self.df_stats.columns:
+                self.df_stats[col] = self.df_stats[col].astype("Int64")
+
+        # merge stats and items id by game time stamps of both
+        result = pd.merge_asof(
+            items_df.sort_values('game_time_s'),
+            self.df_stats.sort_values('time_stamp_s'),
+            left_on='game_time_s',
+            right_on='time_stamp_s',
+            by=['account_id', 'match_id', 'hero_id'],
+            direction='nearest', )
+
+        merged = result.drop(columns=['items', 'stats'])
+
+        purchases_clean = merged[[
+            'match_id', 'account_id', 'hero_id',
+            'game_time_s', 'item_name', 'item_id', 'upgrade_id', 'sold_time_s',
+            'flags', 'imbued_ability_id', 'upgrade_info', 'net_worth'
+        ]]
+        return purchases_clean
+
+
+
