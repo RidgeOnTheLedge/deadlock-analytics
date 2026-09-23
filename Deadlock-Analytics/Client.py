@@ -28,9 +28,10 @@ class client:
         matches = response.json()
 
         matches_df = pd.DataFrame(matches)
+        matches_df = matches_df.drop_duplicates(subset='match_id')
         return matches_df
 
-    def __init__(self, df_matches, df_objectives, df_players, df_stats, df_items):
+    def __init__(self):
         self.df_matches = self.bronze_matches()
         self.df_players = self.silver_players() # Dependent on matches
         self.df_stats = self.silver_stats() # Dependent on df_players being defined
@@ -39,11 +40,10 @@ class client:
 
     def silver_objectives(self):
         # Explode the lists into individual rows
-        matches_objectives = self.df_matches[["match_id", "objectives"]].explode("objectives")
+        matches_objectives = self.df_matches[["match_id", "objectives"]].explode("objectives").reset_index(drop=True)
 
         # Normalize the dictionaries AND preserve the original index alignment
         normalized_df = pd.json_normalize(matches_objectives['objectives'])
-        normalized_df.index = matches_objectives.index
 
         # Join them safely without mismatched rows
         matches_objectives = matches_objectives[["match_id"]].join(normalized_df)
@@ -51,23 +51,18 @@ class client:
 
 
     def silver_players(self):
-        # player_rows = []
-        # for match in self.df_matches:
-        #     for p in match["players"]:
-        #         p["match_id"] = match["match_id"]
-        #         player_rows.append(p)
-        #
-        # df_players = pd.DataFrame(player_rows)
         df_players = pd.json_normalize(self.df_matches.to_dict('records'), record_path=['players'], meta=["match_id"])
+        df_players = df_players[df_players['player_match_outcome'].isin(['Win', 'Loss'])]
         return df_players
 
     def silver_stats(self):
         df_stats =  self.df_players[['match_id', 'account_id', 'hero_id', 'stats']].explode('stats')
-        df_stats = df_stats.join(pd.json_normalize(df_stats['stats']))
+        normalized_df = pd.json_normalize(df_stats['stats'])
+        df_stats = df_stats.join(normalized_df)
         return df_stats
 
     def silver_items(self):
-        items_df = self.df_players[['match_id', 'account_id', 'hero_id', 'items']].explode('items')
+        items_df = self.df_players[['match_id', 'account_id', 'hero_id', 'items', 'player_match_outcome']].explode('items').reset_index(drop=True)
         items_df = items_df.join(pd.json_normalize(items_df['items']))
 
         url = 'https://api.deadlock-api.com/v1/assets/items'
@@ -107,9 +102,10 @@ class client:
         purchases_clean = merged[[
             'match_id', 'account_id', 'hero_id',
             'game_time_s', 'item_name', 'item_id', 'upgrade_id', 'sold_time_s',
-            'flags', 'imbued_ability_id', 'upgrade_info', 'net_worth'
+            'flags', 'imbued_ability_id', 'upgrade_info', 'net_worth', 'player_match_outcome'
         ]]
-        return purchases_clean
+        purchases_clean_dropna = purchases_clean.dropna(subset=['item_name']) # remove starting hero 'items'
+        return purchases_clean_dropna
 
 
 
