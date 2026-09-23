@@ -3,33 +3,9 @@ import pandas as pd
 
 class client:
 
-    def bronze_matches(self):
-        url = 'https://api.deadlock-api.com/v1/matches/metadata'
 
-        params = {
-            "limit": 200,
-            "order_by": "start_time",
-            "order_direction": "desc",
-            "match_mode": "ranked",
-            "include_info": "true",
-            "include_more_info": "true",
-            "include_objectives": "true",
-            "include_mid_boss": "true",
-            "include_player_info": "true",
-            "include_player_final_stats": "true",
-            "include_player_stats": "true",
-            "include_player_items": "true",
-            "include_player_death_details": "true",
-            "hero_ids": "77",  # Only get hero ids for apollo
-            "format": "json",
-        }
-        response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        matches = response.json()
 
-        matches_df = pd.DataFrame(matches)
-        matches_df = matches_df.drop_duplicates(subset='match_id')
-        return matches_df
+
 
     def __init__(self):
         self.df_matches = self.bronze_matches()
