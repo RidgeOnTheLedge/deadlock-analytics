@@ -21,5 +21,7 @@ secrets.json
 .ipynb_checkpoints/
 
 # Data files (optional — uncomment if you don't want to commit large/raw data)
-# *.csv
-# *.parquet
+ *.csv
+ *.parquet
+ *.json
+
