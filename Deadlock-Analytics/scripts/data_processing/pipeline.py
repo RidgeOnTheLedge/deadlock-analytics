@@ -39,14 +39,3 @@ def run_pipeline(match_count: int = 10) -> None:
     # df_stats = client.silver_stats(df_bronze_players)
     # df_items = client.silver_items(df_bronze_players, df_stats)
 
-    # # Next time add this to reload parequet files
-    #
-    # try:
-    #     project_root = Path(__file__).resolve().parents[2]
-    # except NameError:
-    #     project_root = Path.cwd().parents[1]
-    #
-    # file_path = project_root / "data" / "processed" / "matches.parquet"
-    #
-    # # 2. Load the parquet file back into pandas
-    # df_matches = pd.read_parquet(file_path, engine='pyarrow')

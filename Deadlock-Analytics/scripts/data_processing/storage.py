@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pandas as pd
 import pyarrow as pa
 
 
@@ -51,4 +53,21 @@ def store_to_parquet(df, file_name):
     df.to_parquet(file_path, engine='pyarrow')
 
     print(f"Stored {file_name} files to: {output_dir}")
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROCESSED_DATA_DIR = PROJECT_ROOT / "data" / "processed"
+
+def load_parquet_df(file_name: str) -> pd.DataFrame:
+    # Next time add this to reload parequet files
+
+    file_path = PROCESSED_DATA_DIR / file_name
+
+    if not file_path.exists():
+        raise FileNotFoundError(
+            f"Could not find Parquet file: {file_path}"
+        )
+
+    # 2. Load the parquet file back into pandas
+    return pd.read_parquet(file_path, engine='pyarrow')
 
