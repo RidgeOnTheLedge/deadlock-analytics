@@ -8,7 +8,7 @@ from transformations import (
 )
 
 def run_pipeline(match_count: int = 10) -> None:
-    print(f"Pulling {match_count} into a json file from api.deadlock-api.com...")
+    print(f"Pulling {match_count} games into a json file from api.deadlock-api.com...")
 
     matches_json = fetch_matches(match_count)
 
